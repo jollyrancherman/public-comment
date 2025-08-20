@@ -3,8 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/auth-config'
 import { prisma } from '@/lib/prisma'
 import { createMeetingSchema } from '@/lib/validations/meeting'
-import { Role } from '@prisma/client'
+import { Role, MeetingStatus } from '@prisma/client'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/security/sanitization'
 
 export async function GET(req: Request) {
   try {
@@ -13,7 +14,10 @@ export async function GET(req: Request) {
     const limit = searchParams.get('limit')
     const offset = searchParams.get('offset')
 
-    const whereClause = status ? { status: status as any } : {}
+    // Validate status parameter against enum values
+    const whereClause = status && Object.values(MeetingStatus).includes(status as MeetingStatus)
+      ? { status: status as MeetingStatus }
+      : {}
     
     const meetings = await prisma.meeting.findMany({
       where: whereClause,
@@ -26,8 +30,8 @@ export async function GET(req: Request) {
         },
       },
       orderBy: { startTime: 'desc' },
-      take: limit ? parseInt(limit) : undefined,
-      skip: offset ? parseInt(offset) : undefined,
+      take: limit ? Math.max(1, Math.min(100, parseInt(limit) || 10)) : undefined,
+      skip: offset ? Math.max(0, parseInt(offset) || 0) : undefined,
     })
 
     return NextResponse.json({ meetings })
@@ -50,6 +54,18 @@ export async function POST(req: Request) {
 
     if (![Role.STAFF, Role.ADMIN].includes(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    
+    // Rate limiting for meeting creation
+    const rateLimitResult = checkRateLimit(`meeting-create-${session.user.id}`, 5, 60000)
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
+        },
+        { status: 429 }
+      )
     }
 
     const body = await req.json()

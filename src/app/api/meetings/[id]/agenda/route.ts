@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { createAgendaItemSchema, bulkAgendaImportSchema } from '@/lib/validations/meeting'
 import { Role } from '@prisma/client'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/security/sanitization'
 
 export async function GET(
   req: Request,
@@ -50,11 +51,31 @@ export async function POST(
     
     // Check if it's bulk import or single item
     if (Array.isArray(body.items)) {
+      // Rate limiting for bulk imports (more restrictive)
+      const rateLimitResult = checkRateLimit(`bulk-agenda-${session.user.id}`, 2, 60000)
+      if (!rateLimitResult.allowed) {
+        return NextResponse.json(
+          { 
+            error: 'Bulk import rate limit exceeded. Please try again later.',
+            retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
+          },
+          { status: 429 }
+        )
+      }
+      
       // Bulk import
       const validatedData = bulkAgendaImportSchema.parse({
         ...body,
         meetingId: params.id,
       })
+      
+      // Limit bulk import size
+      if (validatedData.items.length > 50) {
+        return NextResponse.json(
+          { error: 'Bulk import limited to 50 items per request' },
+          { status: 400 }
+        )
+      }
 
       // Verify meeting exists
       const meeting = await prisma.meeting.findUnique({
@@ -65,6 +86,35 @@ export async function POST(
         return NextResponse.json(
           { error: 'Meeting not found' },
           { status: 404 }
+        )
+      }
+
+      // Check for existing agenda items and duplicates within the batch
+      const existingItems = await prisma.agendaItem.findMany({
+        where: {
+          meetingId: params.id,
+        },
+        select: { code: true },
+      })
+      
+      const existingCodes = new Set(existingItems.map(item => item.code))
+      const newCodes = new Set()
+      const duplicates: string[] = []
+      
+      for (const item of validatedData.items) {
+        if (existingCodes.has(item.code) || newCodes.has(item.code)) {
+          duplicates.push(item.code)
+        }
+        newCodes.add(item.code)
+      }
+      
+      if (duplicates.length > 0) {
+        return NextResponse.json(
+          { 
+            error: `Duplicate agenda item codes found: ${duplicates.join(', ')}`,
+            duplicateCodes: duplicates 
+          },
+          { status: 400 }
         )
       }
 
@@ -83,6 +133,18 @@ export async function POST(
 
       return NextResponse.json({ agendaItems }, { status: 201 })
     } else {
+      // Rate limiting for individual agenda item creation
+      const rateLimitResult = checkRateLimit(`agenda-create-${session.user.id}`, 20, 60000)
+      if (!rateLimitResult.allowed) {
+        return NextResponse.json(
+          { 
+            error: 'Rate limit exceeded. Please try again later.',
+            retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
+          },
+          { status: 429 }
+        )
+      }
+      
       // Single item creation
       const validatedData = createAgendaItemSchema.parse({
         ...body,
