@@ -36,6 +36,15 @@ export default function Navbar() {
                 Recommendations
               </Link>
               
+              {session && (
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 hover:text-gray-700"
+                >
+                  My Dashboard
+                </Link>
+              )}
+              
               {session?.user.role === 'STAFF' && (
                 <Link
                   href="/staff"
