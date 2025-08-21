@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { MeetingStatus, Role } from '@prisma/client'
 import { Session } from 'next-auth'
+import CommentsList from '@/components/comments/comments-list'
 
 type Meeting = {
   id: string
@@ -254,6 +255,26 @@ export default function MeetingDetails({ meeting, session }: MeetingDetailsProps
             ))}
           </div>
         )}
+      </div>
+
+      {/* Comments Section */}
+      <div className="mt-8 bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Public Comments</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {meeting.status === 'UPCOMING' 
+              ? 'Comments will be visible when the meeting starts.'
+              : 'Comments from community members on this meeting.'
+            }
+          </p>
+        </div>
+        
+        <div className="p-6">
+          <CommentsList 
+            meetingId={meeting.id} 
+            showControls={canManage}
+          />
+        </div>
       </div>
     </div>
   )
