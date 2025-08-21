@@ -17,14 +17,18 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const result = await signIn('email', {
-        email,
-        redirect: false,
-        callbackUrl,
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
       })
 
-      if (result?.error) {
-        setError('Failed to send verification email. Please try again.')
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to send verification code. Please try again.')
       } else {
         window.location.href = '/auth/verify?email=' + encodeURIComponent(email)
       }

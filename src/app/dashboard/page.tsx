@@ -1,12 +1,11 @@
 import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/auth-config'
+import { getServerSession } from '@/lib/auth/session'
 import { prisma } from '@/lib/prisma'
 import Navbar from '@/components/layout/navbar'
 import UserCommentsList from '@/components/comments/user-comments-list'
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions)
+  const session = await getServerSession()
   
   if (!session) {
     redirect('/auth/login')

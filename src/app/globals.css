@@ -24,3 +24,32 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Force visible text in disabled OTP inputs - nuclear option */
+input[type="text"]:disabled,
+input[inputmode="numeric"]:disabled,
+.otp-input,
+.otp-input:disabled,
+input.otp-input,
+input.otp-input:disabled,
+input.otp-input:disabled:focus,
+input.otp-input:disabled:hover {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #000000 !important;
+  -webkit-opacity: 1 !important;
+  filter: none !important;
+}
+
+/* Override any CSS variables that might be affecting color */
+.otp-input {
+  --tw-text-opacity: 1 !important;
+  color: rgb(0 0 0 / var(--tw-text-opacity)) !important;
+}
+
+/* Force override for all possible states */
+input.otp-input[disabled] {
+  color: #000 !important;
+  background: #fff !important;
+}

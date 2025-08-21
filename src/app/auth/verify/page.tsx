@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { useSession } from '@/components/providers/session-provider'
 
 export default function VerifyPage() {
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
@@ -10,6 +10,7 @@ export default function VerifyPage() {
   const [error, setError] = useState('')
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { refreshSession } = useSession()
   const email = searchParams.get('email')
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -74,14 +75,12 @@ export default function VerifyPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Sign in with NextAuth
-        await signIn('credentials', {
-          email,
-          redirect: false,
-        })
+        // Refresh session to update navbar
+        await refreshSession()
+        // Redirect to home page - cookie is already set
         router.push('/')
       } else {
-        setError(data.message || 'Invalid code. Please try again.')
+        setError(data.error || 'Invalid code. Please try again.')
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
@@ -95,12 +94,22 @@ export default function VerifyPage() {
     setError('')
     
     try {
-      await signIn('email', {
-        email,
-        redirect: false,
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
       })
-      setOtp(['', '', '', '', '', ''])
-      setError('')
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setOtp(['', '', '', '', '', ''])
+        setError('')
+      } else {
+        setError(data.error || 'Failed to resend code. Please try again.')
+      }
     } catch (err) {
       setError('Failed to resend code. Please try again.')
     } finally {
@@ -137,7 +146,13 @@ export default function VerifyPage() {
                   value={digit}
                   onChange={(e) => handleChange(index, e.target.value.replace(/\D/g, ''))}
                   onKeyDown={(e) => handleKeyDown(index, e)}
-                  className="w-12 h-12 text-center text-xl font-semibold border-2 border-gray-300 rounded-md focus:border-indigo-500 focus:outline-none"
+                  className="otp-input w-12 h-12 text-center text-xl font-semibold border-2 border-gray-300 rounded-md focus:border-indigo-500 focus:outline-none disabled:!bg-white disabled:!text-black disabled:!opacity-100"
+                  style={{ 
+                    color: '#000000',
+                    backgroundColor: '#ffffff',
+                    opacity: 1,
+                    WebkitTextFillColor: '#000000'
+                  }}
                   disabled={isLoading}
                 />
               ))}
