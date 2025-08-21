@@ -10,7 +10,8 @@ const OTP_EXPIRY_MINUTES = 10
 const MAX_OTP_ATTEMPTS = 3
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  // Remove Prisma adapter to avoid verification token conflicts
+  // adapter: PrismaAdapter(prisma) as any,
   providers: [
     EmailProvider({
       server: {
@@ -47,25 +48,31 @@ export const authOptions: NextAuthOptions = {
           },
         })
         
-        await transport.sendMail({
-          to: email,
-          from: process.env.EMAIL_FROM!,
-          subject: 'Your Public Comment Login Code',
-          text: `Your verification code is: ${otp}\n\nThis code will expire in ${OTP_EXPIRY_MINUTES} minutes.`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>Your Public Comment Login Code</h2>
-              <p>Your verification code is:</p>
-              <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
-                ${otp}
+        // In development, log OTP to console if email isn't configured
+        if (!process.env.EMAIL_SERVER_HOST || process.env.NODE_ENV === 'development') {
+          console.log(`\n🔐 OTP CODE FOR ${email}: ${otp}`)
+          console.log(`This code expires in ${OTP_EXPIRY_MINUTES} minutes.\n`)
+        } else {
+          await transport.sendMail({
+            to: email,
+            from: process.env.EMAIL_FROM!,
+            subject: 'Your Public Comment Login Code',
+            text: `Your verification code is: ${otp}\n\nThis code will expire in ${OTP_EXPIRY_MINUTES} minutes.`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Your Public Comment Login Code</h2>
+                <p>Your verification code is:</p>
+                <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
+                  ${otp}
+                </div>
+                <p>This code will expire in ${OTP_EXPIRY_MINUTES} minutes.</p>
+                <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                  If you didn't request this code, please ignore this email.
+                </p>
               </div>
-              <p>This code will expire in ${OTP_EXPIRY_MINUTES} minutes.</p>
-              <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                If you didn't request this code, please ignore this email.
-              </p>
-            </div>
-          `,
-        })
+            `,
+          })
+        }
       },
     }),
   ],
@@ -75,10 +82,29 @@ export const authOptions: NextAuthOptions = {
     error: '/auth/error',
   },
   callbacks: {
+    async signIn({ user, email }) {
+      if (user.email) {
+        // Create or find user in our database
+        const existingUser = await prisma.user.findUnique({
+          where: { email: user.email },
+        })
+        
+        if (!existingUser) {
+          await prisma.user.create({
+            data: {
+              email: user.email,
+              name: user.name,
+              role: 'RESIDENT', // Default role
+            },
+          })
+        }
+      }
+      return true
+    },
     async jwt({ token, user }) {
-      if (user) {
+      if (user?.email) {
         const dbUser = await prisma.user.findUnique({
-          where: { email: user.email! },
+          where: { email: user.email },
         })
         if (dbUser) {
           token.id = dbUser.id

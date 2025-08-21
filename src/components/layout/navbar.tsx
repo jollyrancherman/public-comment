@@ -1,16 +1,13 @@
 'use client'
 
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from '@/components/providers/session-provider'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 
 export default function Navbar() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const { session, loading, signOut } = useSession()
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false })
-    router.push('/')
+    await signOut()
   }
 
   return (
@@ -84,7 +81,7 @@ export default function Navbar() {
           </div>
           
           <div className="flex items-center">
-            {status === 'loading' ? (
+            {loading ? (
               <div className="text-sm text-gray-500">Loading...</div>
             ) : session ? (
               <div className="flex items-center space-x-4">
