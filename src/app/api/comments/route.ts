@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { createCommentSchema, commentQuerySchema } from '@/lib/validations/comment'
 import { checkCommentRateLimit } from '@/lib/rate-limit'
 import { checkRateLimit } from '@/lib/security/sanitization'
+import { processCommentModeration } from '@/lib/moderation/queue'
 import { Role, CommentVisibility, MeetingStatus } from '@prisma/client'
 import { z } from 'zod'
 
@@ -216,7 +217,15 @@ export async function POST(req: Request) {
       return comment
     })
 
-    // Fetch the complete comment with relationships
+    // Process comment through moderation pipeline
+    try {
+      await processCommentModeration(result.id)
+    } catch (moderationError) {
+      console.error('Moderation processing error:', moderationError)
+      // Continue even if moderation fails - comment is already saved
+    }
+
+    // Fetch the complete comment with relationships and moderation results
     const completeComment = await prisma.comment.findUnique({
       where: { id: result.id },
       include: {
